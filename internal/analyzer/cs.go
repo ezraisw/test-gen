@@ -1,6 +1,6 @@
 package analyzer
 
-import reflect "reflect"
+import "reflect"
 
 type CallSignature struct {
 	Type       reflect.Type

@@ -1,7 +1,7 @@
 package analyzer
 
 import (
-	reflect "reflect"
+	"reflect"
 	"sync"
 
 	gomock "go.uber.org/mock/gomock"
