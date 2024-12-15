@@ -21,17 +21,17 @@ func TestMultiply(t *testing.T) {
 	res := analyzer.Multiply([]*analyzer.MockConfig{
 		{
 			New: func(ctrl *gomock.Controller) any { return example.NewMockService(ctrl) },
-			Methods: []*analyzer.Method{
+			Methods: []*analyzer.MockMethod{
 				{Name: "A", Returns: analyzer.Vary{
-					analyzer.Cutoff{mockErrA1},
-					analyzer.Cutoff{mockErrA2},
-					[]any{nil},
+					analyzer.Stop{mockErrA1},
+					analyzer.Stop{mockErrA2},
+					analyzer.Pass{nil},
 				}},
 				{Name: "B", Returns: analyzer.Vary{
-					analyzer.Cutoff{nil, mockErrB},
-					[]any{&example.Out{X: "This is X", Y: 50}, nil},
+					analyzer.Stop{nil, mockErrB},
+					analyzer.Pass{&example.Out{X: "This is X", Y: 50}, nil},
 				}},
-				{Name: "C", Returns: []any{35}},
+				{Name: "C", Returns: analyzer.Pass{35}},
 			},
 		},
 	}, func(mocks []any) {

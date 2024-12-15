@@ -1,118 +1,122 @@
 package analyzer
 
-import (
-	"go.uber.org/mock/gomock"
-)
-
-type Vary []any
-
-type Cutoff []any
-
-type Method struct {
-	Name    string
-	Returns any
-}
-
-func (m Method) getReturns(i int) []any {
-	if vary, ok := m.Returns.(Vary); ok {
-		if cutoff, ok := vary[i].(Cutoff); ok {
-			return []any(cutoff)
-		}
-		if rets, ok := vary[i].([]any); ok {
-			return rets
-		}
-		return nil
-	}
-	if cutoff, ok := m.Returns.(Cutoff); ok {
-		return []any(cutoff)
-	}
-	if rets, ok := m.Returns.([]any); ok {
-		return rets
-	}
-	return nil
-}
+import "go.uber.org/mock/gomock"
 
 type MockConfig struct {
 	New     func(ctrl *gomock.Controller) any
-	Methods []*Method
+	Methods []*MockMethod
 }
 
-type varyDecision struct {
-	mockCfgIdx int
-	methodIdx  int
-	vary       Vary
-	idx        int
+type MockMethod struct {
+	Name    string
+	Returns VaryLike
 }
 
 func Multiply(mockCfgs []*MockConfig, run func(mocks []any)) [][]*CallSignature {
-	varyDecisions := make([]*varyDecision, 0)
+	dt := newVaryDecisionTree(mockCfgs, run)
+	dt.traverse(0)
+
+	return dt.allCapturedCalls
+}
+
+type varyPathSelection struct {
+	vary Vary
+
+	// Selected mock method's return value.
+	varyIdx int
+}
+
+type varyDecisionTree struct {
+	// Configuration.
+	mockCfgs []*MockConfig
+	run      func(mocks []any)
+
+	// Recursion information.
+	pathSelections []*varyPathSelection
+	toPsIdx        map[[2]int]int
+
+	// Result.
+	allCapturedCalls [][]*CallSignature
+}
+
+func newVaryDecisionTree(mockCfgs []*MockConfig, run func(mocks []any)) *varyDecisionTree {
+	pathSelections := make([]*varyPathSelection, 0)
+	toPsIdx := make(map[[2]int]int)
 
 	for mockCfgIdx, mockCfg := range mockCfgs {
 		for methodIdx, method := range mockCfg.Methods {
-			vary, ok := method.Returns.(Vary)
-			if !ok {
-				continue
-			}
+			key := [2]int{mockCfgIdx, methodIdx}
+			toPsIdx[key] = len(pathSelections) // Index at that time.
+			pathSelections = append(pathSelections, &varyPathSelection{
+				vary: method.Returns.asVary(),
 
-			varyDecisions = append(varyDecisions, &varyDecision{
-				mockCfgIdx: mockCfgIdx,
-				methodIdx:  methodIdx,
-				vary:       vary,
-				idx:        -1,
+				// Set to -1 to indicate no selection.
+				varyIdx: -1,
 			})
 		}
 	}
 
-	res := make([][]*CallSignature, 0)
-	recurse(&res, mockCfgs, run, varyDecisions, 0)
-	return res
+	return &varyDecisionTree{
+		mockCfgs: mockCfgs,
+		run:      run,
+
+		pathSelections: pathSelections,
+		toPsIdx:        toPsIdx,
+
+		allCapturedCalls: make([][]*CallSignature, 0),
+	}
 }
 
-func recurse(res *[][]*CallSignature, mockCfgs []*MockConfig, run func(mocks []any), varyDecisions []*varyDecision, i int) {
-	if len(varyDecisions) == i {
-		m := make(map[[2]int]int)
-
-		for _, varyDecision := range varyDecisions {
-			key := [2]int{varyDecision.mockCfgIdx, varyDecision.methodIdx}
-			m[key] = varyDecision.idx
-		}
-
-		ctrl := gomock.NewController(nil)
-		azr := NewAnalyzer()
-
-		mocks := make([]any, 0, len(mockCfgs))
-		for mockCfgIdx, mockCfg := range mockCfgs {
-			mock := mockCfg.New(ctrl)
-			mocks = append(mocks, mock)
-
-			retsByMethodName := make(map[string][]any)
-			for methodIdx, method := range mockCfg.Methods {
-				varyIdx := m[[2]int{mockCfgIdx, methodIdx}]
-				if varyIdx == -1 {
-					continue
-				}
-				retsByMethodName[method.Name] = method.getReturns(varyIdx)
-			}
-
-			azr.AttachTrap(mock, retsByMethodName)
-		}
-
-		run(mocks)
-
-		*res = append(*res, azr.GetCapturedCalls())
+func (dt *varyDecisionTree) traverse(psIdx int) {
+	if len(dt.pathSelections) == psIdx {
+		dt.pathFinish()
 		return
 	}
 
-	for varyIdx := 0; varyIdx < len(varyDecisions[i].vary); varyIdx++ {
-		nextI := i + 1
-		if _, ok := varyDecisions[i].vary[varyIdx].(Cutoff); ok {
-			nextI = len(varyDecisions)
+	currPs := dt.pathSelections[psIdx]
+
+	for varyIdx := 0; varyIdx < len(currPs.vary); varyIdx++ {
+		nextPsIdx := psIdx + 1
+
+		if !currPs.vary[varyIdx].passable() {
+			// Set nextPsIdx to short circuit the recursion.
+			nextPsIdx = len(dt.pathSelections)
 		}
 
-		prevVaryIdx := varyDecisions[i].idx
-
-		varyDecisions[i].idx = varyIdx
-		recurse(res, mockCfgs, run, varyDecisions, nextI)
-		varyDecisions[i].idx = prevVaryIdx
+		// Restore to previous state after recursion for safety.
+		prevVaryIdx := currPs.varyIdx
+		currPs.varyIdx = varyIdx
+		dt.traverse(nextPsIdx)
+		currPs.varyIdx = prevVaryIdx
 	}
+}
+
+func (dt *varyDecisionTree) pathFinish() {
+	ctrl := gomock.NewController(nil)
+	azr := NewAnalyzer()
+
+	mocks := make([]any, 0, len(dt.mockCfgs))
+	for mockCfgIdx, mockCfg := range dt.mockCfgs {
+		mock := mockCfg.New(ctrl)
+		mocks = append(mocks, mock)
+
+		retsByMethodName := make(map[string][]any)
+		for methodIdx, method := range mockCfg.Methods {
+			psIdx := dt.toPsIdx[[2]int{mockCfgIdx, methodIdx}]
+			ps := dt.pathSelections[psIdx]
+
+			// Skip defining a return value for paths that are not selected.
+			if ps.varyIdx == -1 {
+				continue
+			}
+
+			retsByMethodName[method.Name] = method.Returns.getAt(ps.varyIdx)
+		}
+
+		azr.AttachTrap(mock, retsByMethodName)
+	}
+
+	dt.run(mocks)
+
+	dt.allCapturedCalls = append(dt.allCapturedCalls, azr.GetCapturedCalls())
 }

@@ -14,9 +14,14 @@ import (
 	"github.com/sanity-io/litter"
 )
 
+type (
+	MockConfig = analyzer.MockConfig
+	MockMethod = analyzer.MockMethod
+)
+
 type Test struct {
 	Name        string
-	MockConfigs []*analyzer.MockConfig
+	MockConfigs []*MockConfig
 	Run         func(mocks []any)
 	TestRun     string
 	TestRunPkg  string
