@@ -67,7 +67,7 @@ func (a *Analyzer) AttachTrap(r any, retsByMethodName map[string][]any) {
 		}
 
 		retRvs := methodRv.Call(argRvs)
-		a.attachCall(cs, retRvs[0], retsByMethodName[method.Name])
+		a.attachCall(cs, retRvs[0], rets)
 	}
 }
 
