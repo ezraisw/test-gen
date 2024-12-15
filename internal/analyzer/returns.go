@@ -8,6 +8,7 @@ type VaryLike interface {
 	asVary() Vary
 }
 
+// Defines possible return values for a specific function. Decision tree will explore all possible combination.
 type Vary []VaryElement
 
 func (r Vary) getAt(i int) []any {
@@ -24,6 +25,7 @@ type VaryElement interface {
 	passable() bool
 }
 
+// Defines return values for a specific function. Allows the decision tree to continue deciding paths.
 type Pass []any
 
 func (r Pass) getAt(i int) []any {
@@ -45,6 +47,7 @@ func (r Pass) passable() bool {
 	return true
 }
 
+// Defines return values for a specific function. Prevents the decision tree to continue deciding paths.
 type Stop []any
 
 func (r Stop) getAt(i int) []any {
