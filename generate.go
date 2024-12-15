@@ -10,7 +10,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/ezraisw/test-gen/internal/analyzer"
+	"github.com/ezraisw/test-gen/analyzer"
 	"github.com/sanity-io/litter"
 )
 

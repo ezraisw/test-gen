@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ezraisw/test-gen/internal/analyzer"
+	"github.com/ezraisw/test-gen/analyzer"
 	"github.com/ezraisw/test-gen/internal/example"
 	"github.com/stretchr/testify/assert"
 	gomock "go.uber.org/mock/gomock"

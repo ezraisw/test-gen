@@ -3,7 +3,7 @@ package analyzer_test
 import (
 	"testing"
 
-	"github.com/ezraisw/test-gen/internal/analyzer"
+	"github.com/ezraisw/test-gen/analyzer"
 	"github.com/ezraisw/test-gen/internal/example"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"

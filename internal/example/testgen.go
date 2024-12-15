@@ -8,7 +8,7 @@ import (
 	"errors"
 
 	testgen "github.com/ezraisw/test-gen"
-	"github.com/ezraisw/test-gen/internal/analyzer"
+	"github.com/ezraisw/test-gen/analyzer"
 	"go.uber.org/mock/gomock"
 )
 
